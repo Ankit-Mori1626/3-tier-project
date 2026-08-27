@@ -1,0 +1,41 @@
+# For LOCAL testing only (before you move to the kubeadm cluster).
+# Usage: docker compose up --build
+version: "3.9"
+
+services:
+  database:
+    build: ./database
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env.example
+    environment:
+      POSTGRES_HOST: database
+      KUBECONFIG: /root/.kube/config
+    volumes:
+      - ~/.kube:/root/.kube:ro
+    depends_on:
+      - database
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  db_data:
