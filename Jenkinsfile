@@ -83,6 +83,7 @@ pipeline {
                 
                 // Option A: If Jenkins has kubeconfig file credentials configured
                 // Option B: Running kubectl apply with image replacement
+                withKubeConfig([credentialsId: 'kubeconfig-cred']) {
                 sh """
                     # Replace DOCKERHUB_USERNAME placeholder with actual repository
                     sed -i 's|DOCKERHUB_USERNAME/myapp-backend:latest|${BACKEND_IMAGE}:${IMAGE_TAG}|g' k8s/backend-deployment.yaml
@@ -102,9 +103,9 @@ pipeline {
                     kubectl rollout status deployment/backend -n myapp --timeout=120s
                     kubectl rollout status deployment/frontend -n myapp --timeout=120s
                 """
+                }
             }
         }
-
         stage('6. Health & Telemetry Verification') {
             steps {
                 echo '🔍 Verifying running Pods and Services...'
