@@ -2,20 +2,15 @@ pipeline {
     agent any
 
     environment {
-        // Docker Hub Credentials ID configured in Jenkins (Credentials -> Add Credentials -> Username with password)
-        DOCKERHUB_CREDENTIALS = 'Dockerhub'
-        DOCKERHUB_USERNAME    = 'ankitmori1626' // Change to your Docker Hub username
-        
-        // Image Names
-        BACKEND_IMAGE         = "${DOCKERHUB_USERNAME}/myapp-backend"
-        FRONTEND_IMAGE        = "${DOCKERHUB_USERNAME}/myapp-frontend"
-        
-        // Build Tag
-        IMAGE_TAG             = "${env.BUILD_NUMBER}"
-
-        // Kubernetes Master Node SSH or Kubeconfig Credentials ID
-        // In your private subnet: Jenkins SSH to Master (10.0.2.10) or uses kubeconfig
+        // Credentials IDs stored in Jenkins Manager
+        DOCKERHUB_CREDENTIALS  = 'Dockerhub'
         KUBECONFIG_CREDENTIALS = 'k8s-kubeconfig'
+        
+        // Dynamic Image parameters
+        DOCKERHUB_USERNAME     = 'ankitmori1626'
+        BACKEND_IMAGE          = "${DOCKERHUB_USERNAME}/myapp-backend"
+        FRONTEND_IMAGE         = "${DOCKERHUB_USERNAME}/myapp-frontend"
+        IMAGE_TAG              = "${env.BUILD_NUMBER}"
     }
 
     options {
@@ -81,39 +76,34 @@ pipeline {
             steps {
                 echo '☸️ Deploying to Kubernetes Cluster (myapp namespace)...'
                 
-                // Option A: If Jenkins has kubeconfig file credentials configured
-                // Option B: Running kubectl apply with image replacement
-                withKubeConfig([credentialsId: 'kubeconfig-cred']) {
-                sh """
-                    # Replace DOCKERHUB_USERNAME placeholder with actual repository
-                    sed -i 's|DOCKERHUB_USERNAME/myapp-backend:latest|${BACKEND_IMAGE}:${IMAGE_TAG}|g' k8s/backend-deployment.yaml
-                    sed -i 's|DOCKERHUB_USERNAME/myapp-frontend:latest|${FRONTEND_IMAGE}:${IMAGE_TAG}|g' k8s/frontend-deployment.yaml
+                withKubeConfig([credentialsId: "${KUBECONFIG_CREDENTIALS}"]) {
+                    sh """
+                        # Update manifest tags dynamically
+                        sed -i 's|DOCKERHUB_USERNAME/myapp-backend:latest|${BACKEND_IMAGE}:${IMAGE_TAG}|g' k8s/backend-deployment.yaml
+                        sed -i 's|DOCKERHUB_USERNAME/myapp-frontend:latest|${FRONTEND_IMAGE}:${IMAGE_TAG}|g' k8s/frontend-deployment.yaml
 
-                    # Apply all Kubernetes manifests
-                    kubectl apply -f k8s/namespace.yaml
-                    kubectl apply -f k8s/rbac.yaml
-                    kubectl apply -f k8s/configmap.yaml
-                    kubectl apply -f k8s/secrets.yaml
-                    kubectl apply -f k8s/backend-deployment.yaml
-                    kubectl apply -f k8s/backend-service.yaml
-                    kubectl apply -f k8s/frontend-deployment.yaml
-                    kubectl apply -f k8s/frontend-service.yaml
+                        # Apply all manifests from the k8s folder directly
+                        kubectl apply -f k8s/
 
-                    # Verify rolling updates
-                    kubectl rollout status deployment/backend -n myapp --timeout=120s
-                    kubectl rollout status deployment/frontend -n myapp --timeout=120s
-                """
+                        # Verify deployment rollout status
+                        kubectl rollout status deployment/backend -n myapp --timeout=120s
+                        kubectl rollout status deployment/frontend -n myapp --timeout=120s
+                    """
                 }
             }
         }
+
         stage('6. Health & Telemetry Verification') {
             steps {
                 echo '🔍 Verifying running Pods and Services...'
-                sh """
-                    kubectl get nodes -o wide
-                    kubectl get pods -n myapp -o wide
-                    kubectl get svc -n myapp -o wide
-                """
+                // Added withKubeConfig here to allow status check authentication
+                withKubeConfig([credentialsId: "${KUBECONFIG_CREDENTIALS}"]) {
+                    sh """
+                        kubectl get nodes -o wide
+                        kubectl get pods -n myapp -o wide
+                        kubectl get svc -n myapp -o wide
+                    """
+                }
             }
         }
     }
@@ -121,6 +111,7 @@ pipeline {
     post {
         always {
             echo '🧹 Cleaning up local dangling images...'
+            sh 'docker image prune -f'
         }
         success {
             echo '🎉 Deployment to Kubernetes Cluster Completed Successfully!'
