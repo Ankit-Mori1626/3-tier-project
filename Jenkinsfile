@@ -119,10 +119,6 @@ pipeline {
     }
 
     post {
-        always {
-            echo '🧹 Cleaning up local dangling images...'
-            sh 'docker image prune -f || true'
-        }
         success {
             echo '🎉 Deployment to Kubernetes Cluster Completed Successfully!'
         }
