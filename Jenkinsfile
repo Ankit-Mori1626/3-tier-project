@@ -4,7 +4,7 @@ pipeline {
     environment {
         // Credentials IDs stored in Jenkins Manager
         DOCKERHUB_CREDENTIALS  = 'Dockerhub'
-        KUBECONFIG_CREDENTIALS = 'k8s-kubeconfig'
+        KUBECONFIG_CREDENTIALS = 'kubeconfig-cred'
         
         // Dynamic Image parameters
         DOCKERHUB_USERNAME     = 'ankitmori1626'
